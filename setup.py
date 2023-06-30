@@ -6,7 +6,7 @@ with open('README.md', 'r') as f:
 
 setup(
     name='cube-plot',
-    version='dev',
+    version='0.1',
     description='Plot cube files',
     author='Yanze Wu',
     packages=find_packages(),
@@ -19,10 +19,5 @@ setup(
         'numpy',
         'plotly >= 5.0',
         'scikit-image',
-    ],
-    entry_points = {
-        'console_scripts': [
-            'line = line.__main__:main',
-        ],
-    },
+    ]
 )

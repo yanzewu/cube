@@ -76,22 +76,24 @@ from . import plot
 from .plot import plot_volume, plot_isosurface, plot_molecule, gen_bonds
 
 
-def plot_cube(cube, show_molecule=True, style='mesh'):
+def plot_cube(cube, show_molecule=True, style='mesh', figure=None, mol_kwargs={}, surf_kwargs={}):
     """ Simple wrapper for plotting a cube file.
 
     cube: `Cube` instance or `str` of cube filename;
     show_molecule: Whether display atoms;
     style: One of `None`/'tranparent'/'shading'/'mesh';
+    figure: `None` or exisiting `plotly.graph_object.Figure` instance;
+    mol_kwargs, surf_kwargs: Keyword arguments passed to `plot_molecule()` and `plot_isosurface()`.
     """
 
     if isinstance(cube, str):
         cube = read_cube(cube)
     
     if show_molecule:
-        fig = plot_molecule(cube.charges, cube.coords, solid=True)
+        fig = plot_molecule(cube.charges, cube.coords, solid=True, figure=figure, **mol_kwargs)
     else:
-        fig = None
+        fig = figure
 
     X, Y, Z = cube.meshgrid()
-    return plot_isosurface(X, Y, Z, cube.data, style=style, figure=fig)
+    return plot_isosurface(X, Y, Z, cube.data, style=style, figure=fig, **surf_kwargs)
     
