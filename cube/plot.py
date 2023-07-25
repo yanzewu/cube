@@ -83,7 +83,7 @@ def plot_volume(X:np.ndarray, Y:np.ndarray, Z:np.ndarray, value:np.ndarray, vmin
     if figure is None:
         figure = go.Figure(data=frame_data)
     else:
-        figure.data += frame_data
+        figure.add_traces(frame_data)
 
     return figure
 
@@ -99,7 +99,7 @@ def plot_isosurface(X:np.ndarray, Y:np.ndarray, Z:np.ndarray, value:np.ndarray, 
     relative_scale: Whether draw isosurface according to data distribution;
     draw_negative: If data has both positive and negative part, will draw two surfaces instead of one. If `None`, detects
         from data distribution;
-    style: None/'transparent'/'shading'/'mesh'. A shorthand of controlling multiple parameters of the style;
+    style: None/'transparent'/'shading'/'liquid'/'bubble'/'mesh'. A shorthand of controlling multiple parameters of the style;
     color, color2: Colors for the positive and negative part;
     opacity: Controls the opacity;
     smooth_grid: Generate smoother surfaces by allowing to plot at subgrids. Requires scikit-image; Not compatible with style = mesh;
@@ -165,13 +165,27 @@ def plot_isosurface(X:np.ndarray, Y:np.ndarray, Z:np.ndarray, value:np.ndarray, 
         isosurface_kwargs.update(opacity=0.4)
     elif style == 'shading':
         isosurface_kwargs.update(
-            opacity=1,
+            opacity=opacity,
             lighting=dict(ambient=0.5, specular=1, roughness=0.1, fresnel=0.4),
             lightposition=dict(x=X.flat[-1],y=Y.flat[-1],z=Z.flat[-1]),
         )
+    elif style == 'liquid':
+        isosurface_kwargs.update(
+            opacity=0.4,
+            lighting=dict(ambient=0.5, specular=1, roughness=0.1, fresnel=0.4),
+            lightposition=dict(x=X.flat[-1],y=Y.flat[-1],z=Z.flat[-1]),
+        )
+    elif style == 'bubble':
+        isosurface_kwargs.update(
+            opacity=0.2,
+            lighting=dict(ambient=0.5, specular=1, roughness=0.1, fresnel=0.2),
+            lightposition=dict(x=X.flat[-1],y=Y.flat[-1],z=Z.flat[-1]),
+        )
     elif style == 'mesh':
-        isosurface_kwargs.update(opacity=1, flatshading=True)
-        isosurface_kwargs['surface'].update(fill=0.4)
+        isosurface_kwargs.update(opacity=opacity, flatshading=True)
+        isosurface_kwargs['surface'].update(fill=0.5)
+    else:
+        isosurface_kwargs['opacity'] = opacity
 
     if label:
         isosurface_kwargs['name'] = label
@@ -245,7 +259,7 @@ def _plot_isosurface_ex(X, Y, Z, value, has_negative, **kwargs):
         )
 
 
-def plot_molecule(atoms:list, coords:Optional[np.ndarray]=None, bonds=None, marker_size:int=25, line_width:int=4, 
+def plot_molecule(atoms:list, coords:Optional[np.ndarray]=None, bonds=None, style:Optional[str]=None, marker_size:int=25, line_width:int=8,
                     edge_width:int=1, edge_color='black', colormap:str='fixed', solid:bool=False, naming_mode:str='simpleid', 
                     name_hydrogen:bool=True, show_element_legend:bool=True, label:Optional[str]=None, conn_cutoff:float=2.0, max_neighbor:int=6, 
                     figure:Optional[go.Figure]=None, marker_kwargs:dict={}, scatter_kwargs:dict={}, line_kwargs:dict={}):
@@ -253,13 +267,17 @@ def plot_molecule(atoms:list, coords:Optional[np.ndarray]=None, bonds=None, mark
     atoms: list of atom names;
     coords: N x 3 array of Cartesian coordinates;
     bonds: None, N x 2 integer array of connectivities;
-    marker_size: Referenced marker size in pixels;
-    line_width: Width of bond;
+    style: None/'ballstick'/'ballstick2'/'stick'/'ball'. Controls the style of the graph.
+        - None: Uses simple 2D objects. Easier for displaying labels and controling the visibility;
+        - Others: Will plot 3D model in different styles. For ballstick2/stick/ball, the marker_size and line_width will be overriden;
+    marker_size: Referenced marker size in pixels (will be scaled in 3D mode);
+    line_width: Width of bond in pixels (will be scaled in 3D mode);
     edge_width: Width of marker edges;
     edge_color: Color of marker edges;
     colormap: "fixed" or one of the palette name.
         - palette (default): Using matplotlib palette to assign colors;
         - fixed (TBI): Using fixed color for each element;
+    solid: Deprecated. Equivalent to style='ballstick';
     naming_mode: none/element/simpleid/fullid
         - none: Do not display name;
         - element: Display element names;
@@ -305,7 +323,7 @@ def plot_molecule(atoms:list, coords:Optional[np.ndarray]=None, bonds=None, mark
 
     # Build sizes
     periods = [np.searchsorted(constants.Periods, c) for c in charges]
-    sizes = np.array([min(4, p+1)*marker_size for p in periods])
+    sizes = np.array([min(4, p+1) for p in periods])
 
     # Build texts
     if naming_mode == 'none':
@@ -335,9 +353,24 @@ def plot_molecule(atoms:list, coords:Optional[np.ndarray]=None, bonds=None, mark
     if bonds is None:
         bonds = gen_bonds(charges, coords, conn_cutoff=conn_cutoff, max_neighbor=max_neighbor)
 
-    if solid:
+    if solid and not style:
+        style = 'ballstick'
+
+    if style:
+        if style == 'ballstick2':
+            line_width = 4
+            marker_size = 20
+        elif style == 'ballstick3':
+            line_width = 20
+            marker_size = 30
+        elif style == 'ball':
+            line_width = 0
+            marker_size = 80
+        elif style == 'stick':
+            marker_size = line_width
+
         marker_kwargs1 = dict(
-            size=sizes/80, color=colors
+            size=sizes*marker_size/80 if style != 'stick' else np.ones(len(sizes))*marker_size/80, color=colors
         )
 
         if label:
@@ -356,7 +389,7 @@ def plot_molecule(atoms:list, coords:Optional[np.ndarray]=None, bonds=None, mark
                               )
         scatter_kwargs1.update(scatter_kwargs)
 
-        frame_data = _plot_molecule_ballstick(coords, bonds, line_width/40, **scatter_kwargs1)
+        frame_data = _plot_molecule_ballstick(coords, bonds, line_width/80, **scatter_kwargs1)
         # TODO show text
         # frame_data.append(
         #     go.Scatter3d(x=coords[:,0], y=coords[:,1], z=coords[:,2], text=texts,
@@ -366,7 +399,7 @@ def plot_molecule(atoms:list, coords:Optional[np.ndarray]=None, bonds=None, mark
 
     elif not show_element_legend:
         marker_kwargs1 = dict(
-            size=sizes, opacity=1, color=colors,
+            size=sizes*marker_size, opacity=1, color=colors,
             line=dict(color=edge_color, width=edge_width)
         )
         marker_kwargs1.update(marker_kwargs)
@@ -391,7 +424,7 @@ def plot_molecule(atoms:list, coords:Optional[np.ndarray]=None, bonds=None, mark
         group = np.array([elem_ids[n] for n in names])
         for j, name in enumerate(list(unique_names)): 
             f = group == j
-            marker_kwargs1 = dict(size=sizes[f], opacity=1, color=colors[f], 
+            marker_kwargs1 = dict(size=sizes[f]*marker_size, opacity=1, color=colors[f], 
                 line=dict(color=edge_color, width=edge_width), **marker_kwargs
             )
             marker_kwargs1.update(marker_kwargs)
@@ -409,7 +442,7 @@ def plot_molecule(atoms:list, coords:Optional[np.ndarray]=None, bonds=None, mark
                 )
             )
 
-    if not solid and line_width > 0:
+    if not style and line_width > 0:
         for p, q in bonds:
             frame_data.append(go.Scatter3d(x=coords[[p,q],0], y=coords[[p,q],1], z=coords[[p,q],2], mode='lines', showlegend=False,
                 line=dict(color='black', width=line_width, **line_kwargs)))
@@ -450,13 +483,15 @@ def _gen_mesh_sphere(center, radius, n_theta:int=20, n_phi:int=40):
 
 def _gen_mesh_cylinder(c1, c2, radius, n_height:int=3, n_phi:int=20):
     
-    if np.allclose(c2-c1, np.array([0,0,1])):
-        x = np.cross(c2-c1, np.array([1,0,0]))
+    dc = (c2-c1)
+    dc /= np.linalg.norm(dc)
+    if np.allclose(dc, np.array([0,0,1])):
+        x = np.cross(dc, np.array([1,0,0]))
     else:
-        x = np.cross(c2-c1, np.array([0,0,1]))
+        x = np.cross(dc, np.array([0,0,1]))
     x *= (radius/np.linalg.norm(x))
     
-    y = np.cross(c2-c1, x)
+    y = np.cross(dc, x)
     y *= (radius/np.linalg.norm(y))
 
     H, Phi = np.meshgrid(np.arange(0,n_height+1)/n_height, np.arange(n_phi)*np.pi*2/n_phi, indexing='ij')
@@ -489,13 +524,14 @@ def _plot_molecule_ballstick(coords, bonds, bond_width, **kwargs):
         faces.append(f)
         colors.append(np.repeat([colorlist[j]], len(v), 0))
 
-    for p, q in bonds:
-        v, f = _gen_mesh_cylinder(coords[p], coords[q], bond_width)
-        verts.append(v)
-        faces.append(f)
-        colors.append(np.concatenate((
-            np.repeat([colorlist[p]], len(v)//2, 0), 
-            np.repeat([colorlist[q]], len(v)-len(v)//2, 0))))
+    if bond_width > 0:
+        for p, q in bonds:
+            v, f = _gen_mesh_cylinder(coords[p], coords[q], bond_width)
+            verts.append(v)
+            faces.append(f)
+            colors.append(np.concatenate((
+                np.repeat([colorlist[p]], len(v)//2, 0), 
+                np.repeat([colorlist[q]], len(v)-len(v)//2, 0))))
 
     # squeez the mesh
     nverts = np.cumsum([0] + [len(v) for v in verts])

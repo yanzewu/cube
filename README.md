@@ -8,6 +8,11 @@ Simple visualizer of [cube files](paulbourke.net/dataformats/cube/). Jupyter not
 <img width="30%" height="20%" src="doc/1.png">
 <img width="30%" height="20%" src="doc/2.png">
 </div>
+<div style="display:flex; flex-direction: row; justify-content: center; align-items: center">
+<img width="30%" height="20%" src="doc/3.png">
+<img width="30%" height="20%" src="doc/4.png">
+<img width="30%" height="20%" src="doc/5.png">
+</div>
 
 
 ## Installation

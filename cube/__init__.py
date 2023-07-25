@@ -74,7 +74,7 @@ def read_cube(filename:str) -> Cube:
 
 from . import plot
 from .plot import plot_volume, plot_isosurface, plot_molecule, gen_bonds
-
+from .util import set_aspect, clear_axis, set_background_color
 
 def plot_cube(cube, show_molecule=True, style='mesh', figure=None, mol_kwargs={}, surf_kwargs={}):
     """ Simple wrapper for plotting a cube file.
