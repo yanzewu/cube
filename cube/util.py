@@ -12,6 +12,7 @@ def clear_axis(figure:go.Figure):
             zaxis = dict(visible=False)
             )
         )
+    return figure
     
 def set_aspect(figure:go.Figure):
     """ Set the aspect of figure according to data.
@@ -19,6 +20,7 @@ def set_aspect(figure:go.Figure):
     figure.update_layout(
         scene={'aspectmode': 'data'}
     )
+    return figure
 
 
 def set_background_color(figure:go.Figure, color):
@@ -27,9 +29,12 @@ def set_background_color(figure:go.Figure, color):
     figure.update_layout(
         paper_bgcolor=color,
     )
+    return figure
 
 
 def mesh2ply(mesh:go.Mesh3d):
+    """ Export a mesh to plyfile.PlyData (requires plyfile package)
+    """
 
     import plyfile
     import numpy as np

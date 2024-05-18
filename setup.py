@@ -19,5 +19,6 @@ setup(
         'numpy',
         'plotly >= 5.0',
         'scikit-image',
+        'plyfile',
     ]
 )

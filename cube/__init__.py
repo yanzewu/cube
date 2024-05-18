@@ -95,5 +95,7 @@ def plot_cube(cube, show_molecule=True, style='mesh', figure=None, mol_kwargs={}
         fig = figure
 
     X, Y, Z = cube.meshgrid()
-    return plot_isosurface(X, Y, Z, cube.data, style=style, figure=fig, **surf_kwargs)
+    return util.set_aspect(
+        plot_isosurface(X, Y, Z, cube.data, style=style, figure=fig, **surf_kwargs)
+    )
     

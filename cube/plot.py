@@ -2,20 +2,23 @@
 from plotly import graph_objects as go
 import plotly.colors
 import numpy as np
+import warnings
 from typing import Optional, Union
 from . import constants
 
 def plot_volume(X:np.ndarray, Y:np.ndarray, Z:np.ndarray, value:np.ndarray, vmin:float=0.02, vmax:float=1.0, 
-                   relative_scale:bool=True, opacity:float=0.9, auto_opacity:bool=True, 
+                   relative_scale:bool=True, opacity:float=0.9, auto_opacity:bool=True, nonzero_tol:float=1e-6,
                    nslice:int=20, colormap=None, colorbar:bool=True,
                    label='', figure:Optional[go.Figure]=None, **kwargs) -> go.Figure:
     """ Plot a volumetric graph by repeatedly drawing isosurfaces.
 
     X, Y, Z, value: (Nx x Ny x Nz) float array for the 3D data;
-    vmin, vmax: Controls the range to draw the density. Sets "isomin" and "isomax" in `Volume()`.
+    vmin, vmax: Controls the range to draw the density. Sets "isomin" and "isomax" in `Volume()`. If data has negative values, \
+        vmin will be set to -vmax.
     relative_scale: Whether scale vmin/vmax according to data distribution;
     opacity: The opacity amount;
     auto_opacity: Set opacity based on data: set 0 as most transparent. Sets "opacityscale" in `Volume()`;
+    nonzero_tol: Treshold for nonzero identification in setting up opaticity and color scales;
     nslice: Number of slices of isosurface plots to enumlate the volume plot;
     colormap: The palette. Sets "colorscale" in `Volume()`;
     colorbar: Whether to draw the colorbar. Sets "showscale" in `Volume()`;
@@ -26,22 +29,29 @@ def plot_volume(X:np.ndarray, Y:np.ndarray, Z:np.ndarray, value:np.ndarray, vmin
     """
     
     dataabs = np.abs(value)
-    dataave = np.average(dataabs[dataabs > 1e-6])
-    if np.any(value < -1e-6):
-        datanegave = np.average(np.abs(value)[value < -1e-6])
+    dataave = np.average(dataabs[dataabs > nonzero_tol])
+    if np.any(value < -nonzero_tol):
+        datanegave = np.average(np.abs(value)[value < -nonzero_tol])
         has_negative = datanegave > dataave / 10 or not np.isnan(datanegave)
+        has_positive = np.any(value > nonzero_tol)
     else:
         has_negative = False
 
+
     if relative_scale:
         if has_negative:
-            datapos = value[value > 1e-6]
-            dataneg = value[value < -1e-6]
-            dataavepos = np.mean(datapos)
+            dataneg = value[value < -nonzero_tol]
             dataaveneg = np.mean(dataneg)
 
-            refedge = max(dataavepos + 8*min(np.std(datapos),dataavepos,0.1*np.max(datapos)), 
+            if has_positive:
+                datapos = value[value > nonzero_tol]
+                dataavepos = np.mean(datapos)
+                refedge = max(dataavepos + 8*min(np.std(datapos),dataavepos,0.1*np.max(datapos)), 
                           -dataaveneg + 8*min(np.std(dataneg),-dataaveneg,-0.1*np.min(dataneg)))
+            else:
+                warnings.warn("The positive part of the density is too small. Consider plotting the absolute value instead.")
+                refedge = -dataaveneg + 8*min(np.std(dataneg),-dataaveneg,-0.1*np.min(dataneg))
+
             vmin = -refedge * vmax
             vmax = refedge * vmax
         else:
@@ -91,17 +101,18 @@ def plot_volume(X:np.ndarray, Y:np.ndarray, Z:np.ndarray, value:np.ndarray, vmin
 
 def plot_isosurface(X:np.ndarray, Y:np.ndarray, Z:np.ndarray, value:np.ndarray, iso:float=0.4, relative_scale:bool=True,
                     draw_negative:Optional[bool]=None, style:Optional[str]=None, color:str='DarkOrchid', color2:Optional[str]=None, 
-                    opacity:float=1.0, smooth_grid:bool=False, label:Optional[str]=None, figure:Optional[go.Figure]=None, **kwargs):
+                    opacity:float=1.0, nonzero_tol:float=1e-6, smooth_grid:bool=False, label:Optional[str]=None, figure:Optional[go.Figure]=None, **kwargs):
     """ Plot an isosurface at value==iso.
 
     X, Y, Z, value: (Nx x Ny x Nz) float array for the 3D data;
     iso: The value to compute the isosurface. If `relative_scale` is set, will draw according to data distribution;
     relative_scale: Whether draw isosurface according to data distribution;
-    draw_negative: If data has both positive and negative part, will draw two surfaces instead of one. If `None`, detects
+    draw_negative: If data has both positive and negative part, will draw two surfaces instead of one. If `None`, detects \
         from data distribution;
     style: None/'transparent'/'shading'/'liquid'/'bubble'/'mesh'. A shorthand of controlling multiple parameters of the style;
     color, color2: Colors for the positive and negative part;
     opacity: Controls the opacity;
+    nonzero_tol: Treshold for nonzero identification in setting up opaticity and color scales;
     smooth_grid: Generate smoother surfaces by allowing to plot at subgrids. Requires scikit-image; Not compatible with style = mesh;
     label: Label of the data. If not `None`, sets the "name=label" and "showlegend=True" in `Isosurface()`;
     figure: If provided, draws on the exisiting figure; Otherwise creates a new figure.
@@ -112,27 +123,38 @@ def plot_isosurface(X:np.ndarray, Y:np.ndarray, Z:np.ndarray, value:np.ndarray, 
 
     if draw_negative is None:
         dataabs = np.abs(value)
-        dataave = np.average(dataabs[dataabs > 1e-6])
-        if np.any(value < -1e-6):
-            datanegave = np.average(np.abs(value)[value < -1e-6])
+        dataave = np.average(dataabs[dataabs > nonzero_tol])
+        if np.any(value < -nonzero_tol):
+            datanegave = np.average(np.abs(value)[value < -nonzero_tol])
+            has_positive = np.any(value > nonzero_tol)
             has_negative = datanegave > dataave / 10 or not np.isnan(datanegave)
         else:
+            has_positive = True
             has_negative = False
     else:
+        has_positive = True
         has_negative = draw_negative
 
     if relative_scale:
-        datapos = value[value > 1e-6]
-        dataavepos = np.mean(datapos)
+        
         if has_negative:
-            dataneg = value[value < -1e-6]
+            dataneg = value[value < -nonzero_tol]
             dataaveneg = np.mean(dataneg)
 
-            refedge = max(dataavepos + 8*min(np.std(datapos),dataavepos,0.1*np.max(datapos)), 
-                          -dataaveneg + 8*min(np.std(dataneg),-dataaveneg,-0.1*np.min(dataneg)))
-            isomin = -refedge * iso
-            isomax = refedge * iso
+            if has_positive:
+                datapos = value[value > nonzero_tol]
+                dataavepos = np.mean(datapos)
+                refedge = max(dataavepos + 8*min(np.std(datapos),dataavepos,0.1*np.max(datapos)), 
+                            -dataaveneg + 8*min(np.std(dataneg),-dataaveneg,-0.1*np.min(dataneg)))
+                isomin = -refedge * iso
+                isomax = refedge * iso
+            else:
+                refedge = -dataaveneg + 8*min(np.std(dataneg),-dataaveneg,-0.1*np.min(dataneg))
+                isomin = -refedge * iso
+                isomax = -refedge * iso + 1e-5
         else:
+            datapos = value[value > nonzero_tol]
+            dataavepos = np.mean(datapos)
             refedge = dataavepos + 8*min(np.std(datapos), dataavepos, 0.1*np.max(value))
             isomin = refedge * iso
             isomax = refedge * iso + 1e-5
@@ -149,8 +171,12 @@ def plot_isosurface(X:np.ndarray, Y:np.ndarray, Z:np.ndarray, value:np.ndarray, 
             color2 = '#ffeb00' # TODO translate based on color1
 
     if has_negative:
-        surfcount = 2
-        colorscale = [(0,color2),(1,color)]
+        if has_positive:
+            surfcount = 2
+            colorscale = [(0,color2),(1,color)]
+        else:
+            surfcount = 1
+            colorscale = [(0,color2),(1,color2)]
     else:
         surfcount = 1
         colorscale = [(0,color),(1,color)]
@@ -202,7 +228,8 @@ def plot_isosurface(X:np.ndarray, Y:np.ndarray, Z:np.ndarray, value:np.ndarray, 
             **isosurface_kwargs
         )
     else:
-        frame_data = _plot_isosurface_ex(X, Y, Z, value, has_negative, **isosurface_kwargs)
+        frame_data = _plot_isosurface_ex(X, Y, Z, value, has_negative and has_positive, **isosurface_kwargs)
+        # the has_negative in _plot() just means we want to plot "both positive and negative"
 
     if figure is None:
         figure = go.Figure(data=frame_data)
@@ -270,6 +297,7 @@ def plot_molecule(atoms:list, coords:Optional[np.ndarray]=None, bonds=None, styl
     style: None/'ballstick'/'ballstick2'/'stick'/'ball'. Controls the style of the graph.
         - None: Uses simple 2D objects. Easier for displaying labels and controling the visibility;
         - Others: Will plot 3D model in different styles. For ballstick2/stick/ball, the marker_size and line_width will be overriden;
+
     marker_size: Referenced marker size in pixels (will be scaled in 3D mode);
     line_width: Width of bond in pixels (will be scaled in 3D mode);
     edge_width: Width of marker edges;
@@ -277,18 +305,20 @@ def plot_molecule(atoms:list, coords:Optional[np.ndarray]=None, bonds=None, styl
     colormap: "fixed" or one of the palette name.
         - palette (default): Using matplotlib palette to assign colors;
         - fixed (TBI): Using fixed color for each element;
+
     solid: Deprecated. Equivalent to style='ballstick';
     naming_mode: none/element/simpleid/fullid
         - none: Do not display name;
         - element: Display element names;
         - simpleid (default): Display element name + relative index within the same elements;
         - fullid: Display element name + full index;
+
     name_hydrogen: Whether display names for hydrogen.
     show_element_legend: Show legend for each element;
     label: Label of the molecule, or None. Turns on the legend;
     conn_cutoff, max_neighbor: Arguments for generating chemical bonds;
     figure: plotly.graph_objects.Figure; 
-    scatter_kwargs, marker_kwargs, line_kwargs: Additional argument passed to scatter3D for points, the marker kwarg for 
+    scatter_kwargs, marker_kwargs, line_kwargs: Additional argument passed to scatter3D for points, the marker kwarg for \
         scatter3D for points, and the line kwarg for scatter3D for bonds.
 
     Additional kwargs will be passed to gen_plot_args().
